@@ -1,4 +1,4 @@
-# DualXGB
+# LongXGB
 
 ## 环境配置
 

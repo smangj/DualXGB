@@ -3,42 +3,45 @@
 # @Time     : 2024/8/15 15:39
 # @Author   : wsy
 # @email    : 631535207@qq.com
+from tscv import GapKFold
 import pandas as pd
 import numpy as np
 
-data = pd.read_csv("data/豆粕.csv")
+from evaluate import eva, mean_evaresult
+from models import LongXGB
+
+# from sklearn.model_selection import train_test_split
+
+pre_len = 40
+data = pd.read_csv("data/豆粕.csv", index_col="date").iloc[:, 1:]
+feature_column = data.columns
+data["label"] = data["his_rv_1month_futures"].shift(-pre_len)
+data = data.dropna()
+# label = data["his_rv_1month_futures"].shift(-pre_len)
+# X_train, X_test, y_train, y_test = train_test_split(data, label, test_size=.2)
+
+n_splits = 5
+gap_size = 60
+gkf = GapKFold(n_splits=n_splits, gap_before=gap_size, gap_after=gap_size)
+
+model_list = [LongXGB]
+
+for model_class in model_list:
+    fold = []
+    feature_importance = []
+    for train_index, test_index in gkf.split(data):
+        model = model_class()
+        model.fit(data.iloc[train_index][feature_column], model.generate_label(data.iloc[train_index]["label"]))
+
+        pred = model.predict(data.iloc[test_index][feature_column])
+        fold.append(eva(model.generate_label(data.iloc[test_index]["label"]), pred))
+        # try:
+        #     fi = model.get_feature_importance()
+        #     feature_importance.append(fi)
+        # except:
+        #     pass
+
+    avg = mean_evaresult(fold)
+    print(fold)
 
 
-def time_series_gap_cv(data, n_splits, block_size, gap_size):
-    """
-    实现Time series gap cross-validation。
-
-    :param data: 时间序列数据，可以是特征矩阵或目标向量
-    :param n_splits: 折数
-    :param block_size: 每个块的大小
-    :param gap_size: 块之间的间隔大小
-    :return: 生成器，产生训练/测试索引对
-    """
-    n_samples = len(data)
-
-    for i in range(n_splits):
-        # 计算当前折的测试块起始位置
-        test_start = i * (block_size + gap_size) + block_size
-        test_end = (i + 1) * (block_size + gap_size) + block_size
-
-        # 确保测试块不会超出数据范围
-        if test_end > n_samples:
-            break
-
-        # 划分训练和测试索引
-        train_index = np.arange(test_start - block_size - gap_size)
-        test_index = np.arange(test_start, min(test_end, n_samples))
-
-        yield train_index, test_index
-
-
-# 使用Blocked time series cross-validation
-for train_index, test_index in time_series_gap_cv(
-    data, n_splits=5, block_size=0, gap_size=1
-):
-    print("训练索引:", train_index, "测试索引:", test_index)
