@@ -1,8 +1,11 @@
+import numpy as np
+import pandas as pd
+
 from models.models import Model
 from models.short_models import ShortXGB
 import xgboost
-
-# from arch import arch_model
+from tqdm import tqdm
+from arch import arch_model
 
 
 class XGB(ShortXGB):
@@ -15,20 +18,44 @@ class XGB(ShortXGB):
         )
 
 
-class Lstm(Model):
-    def fit(self, ret):
-        pass
-        # garch_model = arch_model(ret, vol="Garch", p=1, q=1, dist="Normal")
+class Garch(Model):
+    WindowSize = 120
+    ForecastHorizon = 40
+    def fit(self, ret, test_start_date=None):
+        if test_start_date is not None:
+            start = ret.index.get_loc(test_start_date)
+        else:
+            start = self.WindowSize
 
-        # 拟合模型
-        # garch_fit = garch_model.fit(disp="off")
-        # self.model = garch_fit
+        end = len(ret[start:]) + start
+        forecast_start_date = ret.index[start:end]
+        forecast = []
+        for i in tqdm(range(start, end)):
+            window_data = ret.iloc[i - self.WindowSize:i]
+
+            garch_model = arch_model(window_data, vol="Garch", p=1, q=1, mean="Constant", dist="Normal")
+
+            try:
+                # 拟合模型
+                garch_fit = garch_model.fit(disp="off")
+            except Exception as e:
+                print("\n模型在索引{i}（{ret.index[i]}）失败:{e}")
+                forecast.append([np.nan] * self.ForecastHorizon)
+                continue
+
+            forecast.append(garch_fit.forecast(horizon=self.ForecastHorizon).variance.iloc[-1].values)
+
+        forecast_columns = [f'h{h}' for h in range(1, self.ForecastHorizon + 1)]
+        forecasts_df = pd.DataFrame(forecast, index=forecast_start_date, columns=forecast_columns)
+
+        forecasts_df['mean_forecast_var'] = forecasts_df.mean(axis=1)
+        forecasts_df['mean_forecast_vol'] = np.sqrt(forecasts_df['mean_forecast_var'])
+        self.result = forecasts_df
 
     def predict(self, *args, **kwargs):
-        pass
-        # horizon = 20
-        # forecasts = self.model.forecast(horizon=horizon)
+
+        return self.result["mean_forecast_vol"]
 
 
-class Garch:
+class L:
     pass
