@@ -7,7 +7,7 @@ import pandas as pd
 
 from drawts import draw_ts
 from evaluate import eva_regression
-from models.pred_models import XGB, Garch
+from models.pred_models import XGB, Garch, Lstm
 
 pre_len = 40
 data = pd.read_csv("data/豆粕.csv", index_col="date").iloc[:, 1:]
@@ -20,13 +20,13 @@ test_start_date = "2023-07-03"
 train_df = data.loc[:test_start_date]
 test_df = data.loc[test_start_date:]
 
-model_class = XGB
+model_class = Lstm
 
 model = model_class()
 
 model.fit(
     train_df[feature_column],
-    model.generate_label(train_df["label"], train_df["his_rv_1month_futures"]),
+    train_df["label"],
 )
 # model.fit(data["his_rv_1day_futures"], test_start_date)
 
